@@ -19,12 +19,8 @@
 ; Utils
 
 
-(defn rotate [en x y z]
-    (.setRotation en x y z))
-
-
 (defn latlng-to-xyz
-  ([lat lng] (latlng-to-xyz lat lng 20))
+  ([lat lng] (latlng-to-xyz lat lng 19))
   ([lat lng u]
   (let [phi (* (- 90 lat) (/ js/Math.PI 180))
         theta (* (- 180 lng) (/ js/Math.PI 180))
@@ -90,7 +86,7 @@
 
 (defn load-globen [runner]
   (let [world (.-world runner)
-        loader (new js/goo.DynamicLoader #js{:world world :rootPath "res-slim"})
+        loader (new js/goo.DynamicLoader #js{:world world :rootPath "res-2"})
         sms (new js/goo.StateMachineSystem runner)]
     (.setSystem world sms)
     (-> (.load loader "root.bundle")
@@ -101,7 +97,8 @@
                  (let [by-name #(.first ((aget world "by" "name") %))
                        earth (by-name "Earth")]
                    (aset js/window "earth" earth)
-                   (rotate earth 0.03 -0.32 0)))))))
+                   (.setRotation earth 0.03 -0.32 0)
+                   (.setTranslation earth -1 -0.7 0)))))))
 
 
 ; Population Data stuff.
@@ -126,24 +123,28 @@
 ; TopoJSON stuff
 
 
-(defn draw-shape [runner coords]
-  (let [vertices (map #(apply latlng-to-xyz %) coords)
+(defn draw-shape [world coords]
+  (let [vertices (map (fn [[lat lng]] (latlng-to-xyz lng lat)) coords)
         verts (map (juxt :x :y :z) vertices)
-        mesh (new js/goo.FilledPolygon (clj->js (flatten verts)))
-        mat (.createMaterial js/goo.Material (.-simpleLit js/goo.ShaderLib))
-        world (.-world runner)
-        en (.createEntity world mesh mat)]
-    (print verts)
+        line (new js/goo.PolyLine (clj->js (flatten verts)) true)
+        ; [p1 p2 & ps] verts
+        ; normal (.cross (new js/goo.Vector3 (clj->js p1)) (clj->js p2))
+        ; path (new js/goo.PolyLine #js[0 1 0 0 10 0])
+        ; surface (.mul line path)
+        gen-mat (.createMaterial js/goo.Material js/goo.ShaderLib.simpleColored)
+        ; mat (.createMaterial js/goo.Material js/goo.ShaderLib.simpleLit)
+        en (.createEntity world line gen-mat #js[-1 -1 0])]
     (.addToWorld en)))
 
 
-(defn draw-country [runner c]
+(defn draw-country [world c]
   (let [geom (aget c "geometry")
         shapes (if (= (.-type geom) "Polygon")
                  [(aget geom "coordinates")]
                  (aget geom "coordinates"))]
     (doseq [s shapes]
-      (draw-shape runner (aget s 0)))))
+      (print s)
+      (draw-shape world (aget s 0)))))
 
 
 (defn load-countries [runner]
@@ -152,10 +153,10 @@
                (let [data (js/JSON.parse res)
                      countries (js/topojson.feature data (aget data "objects" "countries"))
                      features (.-features countries)
-                     indias (filter #(= (.-id %) 356) features)]
-                 (draw-shape runner aussie-data)
-                 #_(doseq [c indias]
-                   (draw-country runner c)))))))
+                     world (.-world runner)
+                     australias (filter #(= (.-id %) 36) features)]
+                 (doseq [c features]
+                   (draw-country world c)))))))
 
 
 ; Start it up!
@@ -168,7 +169,7 @@
     (attach runner "container")
     (load-globen runner)
     (load-countries runner)
-    #_(load-data runner)))
+    (load-data runner)))
 
 
 (aset js/window "onload" init)
