@@ -49,7 +49,7 @@
 
 (defn add-control-script [camera runner]
   (let [domElement (aget runner "renderer" "domElement")
-        initalPosition (new js/goo.Vector3 600 (/ js/Math.PI 2) 0)
+        initalPosition (new js/goo.Vector3 80 (/ js/Math.PI 2) 0)
         options #js{:domElement domElement :spherical initalPosition}
         orbit-script (js/goo.Scripts.create "OrbitCamControlScript" options)]
     (.set camera orbit-script)))
@@ -111,7 +111,7 @@
 
 
 (defn load-data [runner]
-  (-> (.get js/$ "population909500.json")
+  (-> (.get js/$ "data/population909500.json")
       (.then (fn [res]
                (let [[[year data] & rest] (.parse js/JSON res)
                      points (partition 3 data)
@@ -143,12 +143,11 @@
                  [(aget geom "coordinates")]
                  (aget geom "coordinates"))]
     (doseq [s shapes]
-      (print s)
       (draw-shape world (aget s 0)))))
 
 
 (defn load-countries [runner]
-  (-> (.get js/$ "world-50m.json")
+  (-> (.get js/$ "data/world-50m.json")
       (.then (fn [res]
                (let [data (js/JSON.parse res)
                      countries (js/topojson.feature data (aget data "objects" "countries"))
@@ -167,7 +166,7 @@
     (aset js/window "runner" runner)
     (setup-world runner)
     (attach runner "container")
-    (load-globen runner)
+    #_(load-globen runner)
     (load-countries runner)
     (load-data runner)))
 
