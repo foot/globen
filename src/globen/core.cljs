@@ -143,7 +143,7 @@
 (defn load-data [runner]
   (-> (.get js/$ "data/population909500.json")
       (.then (fn [res]
-               (let [[[year data] & rest] (js/JSON.parse res)
+               (let [[[year data] & rest] res
                      points (partition 3 data)
                      is-big (fn [[_ _ v]] (> v 0.05))
                      big-points (filter is-big points)]
@@ -194,9 +194,8 @@
 
 (defn load-countries [runner]
   (-> (.get js/$ "data/world-50m.json")
-      (.then (fn [res]
-               (let [world (.-world runner)
-                     data (js/JSON.parse res)]
+      (.then (fn [data]
+               (let [world (.-world runner)]
                  (draw-countries world data))))))
 
 
