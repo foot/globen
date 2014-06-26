@@ -6,7 +6,11 @@
     <script src="//code.gooengine.com/0.10.1/lib/fsmpack.js"></script>
     <script src="//code.gooengine.com/0.10.1/lib/geometrypack.js"></script>
 
-    <script src="//cdnjs.cloudflare.com/ajax/libs/topojson/1.1.0/topojson.min.js" type="text/javascript" charset="utf-8"></script>
+    <!-- <script src="//cdnjs.cloudflare.com/ajax/libs/topojson/1.1.0/topojson.min.js" type="text/javascript" charset="utf-8"></script> -->
+    <script src="lib/browserify-topojson.js" type="text/javascript" charset="utf-8"></script>
+    <script type="text/javascript">
+      var topojson = require('topojson');
+    </script>
     <script src="//cdnjs.cloudflare.com/ajax/libs/jquery/2.1.1/jquery.min.js" type="text/javascript" charset="utf-8"></script>
 
     <script src="out/goog/base.js" type="text/javascript"></script>
