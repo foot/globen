@@ -28,8 +28,8 @@
 
 
 (defn latlng-to-xyz
-  ([lat lng] (latlng-to-xyz lat lng 20))
-  ([lat lng u]
+  ([lng lat] (latlng-to-xyz lng lat 20))
+  ([lng lat u]
   (let [phi (* (- 90 lat) (/ js/Math.PI 180))
         theta (* (- 180 lng) (/ js/Math.PI 180))
         x (* u (js/Math.sin phi) (js/Math.cos theta))
@@ -121,33 +121,14 @@
 
 ; Placeholder simple sphere globe.
 (defn load-globen [runner]
-  (let [u 20
+  (let [u 19.9
         world (.-world runner)
         box (new js/goo.Sphere 16 16 u)
-        mat (.createMaterial js/goo.Material (.-simpleLit js/goo.ShaderLib))
+        mat (js/goo.Material.createMaterial js/goo.ShaderLib.simpleColored)
+        uniforms (.-uniforms mat)
         en (.createEntity world box mat)]
+    (aset uniforms "color" #js[0.3 0.6 0.9])
     (.addToWorld en)))
-
-
-;
-; Population Data stuff.
-;
-
-
-(defn draw-data [runner data]
-  (doseq [[lat lng value] data]
-    (let [p (latlng-to-xyz lat lng)]
-      (add-point p value (.-world runner)))))
-
-
-(defn load-data [runner]
-  (-> (.get js/$ "data/population909500.json")
-      (.then (fn [res]
-               (let [[[year data] & rest] res
-                     points (partition 3 data)
-                     is-big (fn [[_ _ v]] (> v 0.05))
-                     big-points (filter is-big points)]
-                 (draw-data runner big-points))))))
 
 
 ;
@@ -155,18 +136,39 @@
 ;
 
 
-(defn draw-shape [world coords]
+(defn draw-polygons [world coords]
   (let [vertices (map (fn [[lat lng]] (latlng-to-xyz lng lat)) coords)
         verts (map (juxt :x :y :z) vertices)
         line (new js/goo.PolyLine (clj->js (flatten verts)) true)
-        ; [p1 p2 & ps] verts
+        [p1 p2 & ps] verts
+        normal (.normalize (new js/goo.Vector3 (clj->js p1)))
         ; normal (.cross (new js/goo.Vector3 (clj->js p1)) (clj->js p2))
-        ; path (new js/goo.PolyLine #js[0 1 0 0 10 0])
-        ; surface (.mul line path)
-        gen-mat (.createMaterial js/goo.Material js/goo.ShaderLib.simpleColored)
-        ; mat (.createMaterial js/goo.Material js/goo.ShaderLib.simpleLit)
+        path (new js/goo.PolyLine #js[0 0 0 (.-x normal) (.-y normal) (.-z normal)])
+        surface (.mul line path)
+        ; gen-mat (js/goo.Material.createMaterial js/goo.ShaderLib.simpleColored)
+        ; gen-mat (.createMaterial js/goo.Material js/goo.ShaderLib.simpleLit)
+        top-surface (new js/goo.FilledPolygon (clj->js (flatten verts)))
+        gen-mat (js/getColoredMaterial)
+        en (.createEntity world surface gen-mat #js[0 0 0])
+        top (.createEntity world top-surface gen-mat #js[0 0 0])
+        cullFace (aget gen-mat "cullState")]
+    (aset cullFace "cullFace" "Front")
+    (aset gen-mat "flat" true)
+    (.addToWorld top)
+    (.addToWorld en)))
+
+
+(defn draw-line [world points]
+  (let [line (new js/goo.PolyLine (clj->js points) true)
+        gen-mat (js/goo.Material.createMaterial js/goo.ShaderLib.simpleColored)
         en (.createEntity world line gen-mat #js[0 0 0])]
     (.addToWorld en)))
+
+
+(defn draw-shape [world coords]
+  (let [vertices (map (fn [[lat lng]] (latlng-to-xyz lat lng)) coords)
+        verts (map (juxt :x :y :z) vertices)]
+    (draw-line world (flatten verts))))
 
 
 (defn draw-country [world c]
@@ -179,7 +181,7 @@
 
 (defn draw-countries [world data]
   (let [data (js/topojson.simplify data #js{:coordinate-system "spherical"
-                                            :retain-proportion 0.025
+                                            :retain-proportion 0.2
                                             :verbose true})
         countries (js/topojson.feature data (aget data "objects" "countries"))
         features (.-features countries)
@@ -200,6 +202,76 @@
 
 
 ;
+; Population Data stuff.
+;
+
+
+(defn draw-data-cubes [runner data]
+  (doseq [[lat lng value] data]
+    (let [p (latlng-to-xyz lat lng)]
+      (add-point p value (.-world runner)))))
+
+
+(defn draw-data-shape
+  ([world coords data] (draw-data-shape world coords data 10))
+  ([world coords data s]
+  (let [u (fn [v] (+ 20 (* s (get data v 0))))
+        to-xyz (fn [[lat lng]]
+                 (latlng-to-xyz lat lng (u [lat lng])))
+        vertices (map to-xyz coords)
+        verts (map (juxt :x :y :z) vertices)]
+    (draw-line world (flatten verts)))))
+
+
+(defn draw-circle [world lat data]
+  (let [r (range -180 180 1)
+        points (map #(identity [% lat]) r)]
+    (draw-data-shape world points data 10)))
+
+
+(defn draw-lat [runner data]
+  (let [batch-size 2
+        values (range 90 -90 -1)]
+    (go
+      (doseq [fs (partition batch-size batch-size [] values)]
+        (doseq [l fs]
+          (draw-circle (.-world runner) l data))
+        (<! (timeout 0))))))
+
+
+(defn load-elevation-data [runner]
+  (-> (.get js/$ "data/elevation.json")
+      (.then (fn [res]
+               (let [points (aget res "table" "rows")
+                     points (filter (fn [[_ _ v]] (> v 0)) points)
+                     min-v (apply min (map (fn [[_ _ v]] v) points))
+                     max-v (apply max (map (fn [[_ _ v]] v) points))
+                     scale (-> (js/d3.scale.linear)
+                               (.domain #js [min-v 0 max-v])
+                               (.range #js [-1 0 1 ]))
+                     to-key-values (fn [[lng lat v]] [[lat lng] (scale v)])
+                     dict (into {} (map to-key-values points))]
+                 (print (first points))
+                 (print min-v)
+                 (print max-v)
+                 (draw-lat runner dict))))))
+
+
+(defn load-population-data [runner]
+  (-> (.get js/$ "data/population909500.json")
+      (.then (fn [res]
+               (let [[[year data] & rest] res
+                     points (partition 3 data)
+                     is-big (fn [[_ _ v]] (> v 0.05))
+                     big-points (filter is-big points)
+                     to-key-values (fn [[lng lat v]] [[lat lng] v])
+                     dict (into {} (map to-key-values points))]
+                 (print (count points))
+                 (print (first dict))
+                 (draw-lat runner dict))))))
+
+
+;
 ; Start it up!
 ;
 
@@ -210,8 +282,10 @@
     (setup-world runner)
     (attach runner "container")
     (load-globen runner)
-    (load-countries runner)
-    (load-data runner)))
+    #_(load-countries runner)
+    #_(draw-lat runner)
+    #_(load-elevation-data runner)
+    (load-population-data runner)))
 
 
 (aset js/window "onload" init)
