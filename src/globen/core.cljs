@@ -124,7 +124,7 @@
   (let [u 20
         world (.-world runner)
         box (new js/goo.Sphere 16 16 u)
-        mat (.createMaterial js/goo.Material (.-simpleLit js/goo.ShaderLib))
+        mat (js/goo.Material.createMaterial js/goo.ShaderLib.simpleLit)
         en (.createEntity world box mat)]
     (.addToWorld en)))
 
@@ -159,13 +159,21 @@
   (let [vertices (map (fn [[lat lng]] (latlng-to-xyz lng lat)) coords)
         verts (map (juxt :x :y :z) vertices)
         line (new js/goo.PolyLine (clj->js (flatten verts)) true)
-        ; [p1 p2 & ps] verts
+        [p1 p2 & ps] verts
+        normal (.normalize (new js/goo.Vector3 (clj->js p1)))
         ; normal (.cross (new js/goo.Vector3 (clj->js p1)) (clj->js p2))
-        ; path (new js/goo.PolyLine #js[0 1 0 0 10 0])
-        ; surface (.mul line path)
-        gen-mat (.createMaterial js/goo.Material js/goo.ShaderLib.simpleColored)
-        ; mat (.createMaterial js/goo.Material js/goo.ShaderLib.simpleLit)
-        en (.createEntity world line gen-mat #js[0 0 0])]
+        path (new js/goo.PolyLine #js[0 0 0 (.-x normal) (.-y normal) (.-z normal)])
+        surface (.mul line path)
+        ; gen-mat (js/goo.Material.createMaterial js/goo.ShaderLib.simpleColored)
+        ; gen-mat (.createMaterial js/goo.Material js/goo.ShaderLib.simpleLit)
+        top-surface (new js/goo.FilledPolygon (clj->js (flatten verts)))
+        gen-mat (js/getColoredMaterial)
+        en (.createEntity world surface gen-mat #js[0 0 0])
+        top (.createEntity world top-surface gen-mat #js[0 0 0])
+        cullFace (aget gen-mat "cullState")]
+    (aset cullFace "cullFace" "Front")
+    (aset gen-mat "flat" true)
+    (.addToWorld top)
     (.addToWorld en)))
 
 
@@ -209,9 +217,9 @@
     (aset js/window "runner" runner)
     (setup-world runner)
     (attach runner "container")
-    (load-globen runner)
+    #_(load-globen runner)
     (load-countries runner)
-    (load-data runner)))
+    #_(load-data runner)))
 
 
 (aset js/window "onload" init)
