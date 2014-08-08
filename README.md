@@ -3,8 +3,10 @@ globen
 
 Little project for experimenting with the combo of: ClojureScript, goo-engine, d3, topojson
 
-Building
-------------
+### Demo ###
+http://foot.github.io/globen/
+
+### Building ###
 
 OSX
 
@@ -12,4 +14,5 @@ OSX
     # get a compile watcher going
     lein cljsbuild auto
     # setup some local http server and then:
-    open http://localhost:8000/../globen/
+    python -m SimpleHTTPServer
+    open http://localhost:8000/
